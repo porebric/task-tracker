@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"slices"
 
 	"github.com/porebric/task-tracker/internal/domain"
@@ -65,11 +66,15 @@ func CanViewStats(role domain.Role) bool {
 	return role.CanManageTeam()
 }
 
-// memberRole resolves the actor's role in a team, telling a missing team apart from a user
-// who simply is not in it.
+// memberRole resolves the actor's role in a team with one query on the happy path; only a
+// missing membership costs a second lookup, to tell a missing team apart from a user who
+// simply is not in it.
 func memberRole(ctx context.Context, st *repo.Store, teamID, userID int64) (domain.Role, error) {
-	if _, err := st.TeamByID(ctx, teamID); err != nil {
-		return "", err
+	role, err := st.MemberRole(ctx, teamID, userID)
+	if errors.Is(err, domain.ErrNotTeamMember) {
+		if _, teamErr := st.TeamByID(ctx, teamID); teamErr != nil {
+			return "", teamErr
+		}
 	}
-	return st.MemberRole(ctx, teamID, userID)
+	return role, err
 }

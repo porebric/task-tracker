@@ -15,14 +15,16 @@ CREATE TABLE a (
     note VARCHAR(10) DEFAULT 'x;y'
 );
 
-INSERT INTO a VALUES (1, "a;b");
+INSERT INTO a VALUES (1, "a;b"); -- trailing; comment
+INSERT INTO a VALUES (2, 'it\'s');
 UPDATE a SET note = 'z'
 `
 	got := splitStatements(script)
-	require.Len(t, got, 3)
+	require.Len(t, got, 4)
 	assert.Contains(t, got[0], "DEFAULT 'x;y'")
 	assert.Equal(t, `INSERT INTO a VALUES (1, "a;b")`, got[1])
-	assert.Equal(t, "UPDATE a SET note = 'z'", got[2])
+	assert.Equal(t, `INSERT INTO a VALUES (2, 'it\'s')`, got[2])
+	assert.Equal(t, "UPDATE a SET note = 'z'", got[3])
 	assert.Empty(t, splitStatements("-- nothing here\n\n"))
 }
 

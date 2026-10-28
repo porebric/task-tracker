@@ -98,3 +98,31 @@ func TestTaskList_FailsOpenWhenRedisIsDown(t *testing.T) {
 	c.Set(context.Background(), ListKey{TeamID: 1}, "g", got)
 	c.Invalidate(context.Background(), 1)
 }
+
+func TestTaskList_ReplaysInvalidationAfterOutage(t *testing.T) {
+	srv := miniredis.RunT(t)
+	c := NewTaskList(redis.NewClient(&redis.Options{
+		Addr:        srv.Addr(),
+		MaxRetries:  -1,
+		DialTimeout: 100 * time.Millisecond,
+	}), time.Minute)
+	ctx := context.Background()
+	key := ListKey{TeamID: 1, Limit: 20}
+	var got []string
+
+	token, _ := c.Get(ctx, key, &got)
+	c.Set(ctx, key, token, []string{"before"})
+
+	srv.Close()
+	c.Invalidate(ctx, 1)
+	require.NoError(t, srv.Restart())
+
+	_, hit := c.Get(ctx, key, &got)
+	assert.False(t, hit, "a page cached before the outage must not survive a lost invalidation")
+
+	token, _ = c.Get(ctx, key, &got)
+	c.Set(ctx, key, token, []string{"after"})
+	_, hit = c.Get(ctx, key, &got)
+	assert.True(t, hit)
+	assert.Equal(t, []string{"after"}, got)
+}

@@ -9,6 +9,11 @@ import (
 	"github.com/porebric/task-tracker/internal/repo"
 )
 
+const (
+	defaultListLimit = 20
+	maxListLimit     = 100
+)
+
 type Tasks struct {
 	store *repo.Store
 	lists *cache.TaskList
@@ -100,6 +105,12 @@ func (s *Tasks) List(ctx context.Context, actorID int64, f repo.TaskFilter) (*Ta
 	if _, err := memberRole(ctx, s.store, f.TeamID, actorID); err != nil {
 		return nil, err
 	}
+	if f.Limit <= 0 {
+		f.Limit = defaultListLimit
+	}
+	if f.Limit > maxListLimit {
+		f.Limit = maxListLimit
+	}
 
 	key := cache.ListKey{
 		TeamID:     f.TeamID,
@@ -166,10 +177,6 @@ func (s *Tasks) Update(ctx context.Context, actorID, taskID int64, in UpdateTask
 
 		now := s.now()
 		applyChanges(task, in, now)
-		// The cache generation is replaced while the row is locked and once more after the
-		// commit: a reader that picked up the new generation before the commit still caches
-		// the old state, and the second replacement drops that entry.
-		s.lists.Invalidate(ctx, task.TeamID)
 		if err := tx.UpdateTask(ctx, task); err != nil {
 			return err
 		}
@@ -187,6 +194,8 @@ func (s *Tasks) Update(ctx context.Context, actorID, taskID int64, in UpdateTask
 	if err != nil {
 		return nil, err
 	}
+	// Bumping after the commit is enough: a reader that fetched the generation earlier stores
+	// its page under that older generation, which nobody reads once the bump lands.
 	if changed {
 		s.lists.Invalidate(ctx, result.TeamID)
 	}

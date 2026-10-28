@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -39,6 +40,8 @@ type TaskList struct {
 	rdb     *redis.Client
 	ttl     time.Duration
 	breaker *gobreaker.CircuitBreaker[[]byte]
+	// pending holds the teams whose invalidation failed; it is replayed before any lookup.
+	pending sync.Map
 }
 
 func NewTaskList(rdb *redis.Client, ttl time.Duration) *TaskList {
@@ -62,7 +65,7 @@ func NewTaskList(rdb *redis.Client, ttl time.Duration) *TaskList {
 // before the lookup and must be handed to Set, so a page loaded from the database is never
 // stored under a generation newer than the data it holds.
 func (c *TaskList) Get(ctx context.Context, key ListKey, dst any) (token string, hit bool) {
-	if c == nil {
+	if c == nil || !c.replayPending(ctx) {
 		return "", false
 	}
 	var generation string
@@ -107,16 +110,38 @@ func (c *TaskList) Set(ctx context.Context, key ListKey, token string, value any
 	}
 }
 
-// Invalidate starts a new generation for the team; pages of older generations are never read again.
+// Invalidate starts a new generation for the team; pages of older generations are never read
+// again. When Redis is unavailable the team is remembered and the cache stays bypassed until
+// the invalidation goes through, so no page cached before the outage is served afterwards.
 func (c *TaskList) Invalidate(ctx context.Context, teamID int64) {
 	if c == nil {
 		return
 	}
-	if _, err := c.breaker.Execute(func() ([]byte, error) {
-		return nil, c.rdb.Set(ctx, generationKey(teamID), newGeneration(), 0).Err()
-	}); err != nil {
-		logger.Warn(ctx, "cache: invalidate failed", "team_id", teamID, "error", err.Error())
+	if err := c.bump(ctx, teamID); err != nil {
+		c.pending.Store(teamID, struct{}{})
+		logger.Warn(ctx, "cache: invalidate failed, will retry", "team_id", teamID, "error", err.Error())
 	}
+}
+
+func (c *TaskList) bump(ctx context.Context, teamID int64) error {
+	_, err := c.breaker.Execute(func() ([]byte, error) {
+		return nil, c.rdb.Set(ctx, generationKey(teamID), newGeneration(), 0).Err()
+	})
+	return err
+}
+
+func (c *TaskList) replayPending(ctx context.Context) bool {
+	done := true
+	c.pending.Range(func(key, _ any) bool {
+		teamID, _ := key.(int64)
+		if err := c.bump(ctx, teamID); err != nil {
+			done = false
+			return false
+		}
+		c.pending.Delete(key)
+		return true
+	})
+	return done
 }
 
 func (c *TaskList) generation(ctx context.Context, teamID int64) (string, error) {

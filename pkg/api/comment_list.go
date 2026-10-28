@@ -12,8 +12,7 @@ type ListCommentsRequest struct {
 }
 
 func NewListCommentsRequest(ctx context.Context, r *http.Request) (context.Context, ListCommentsRequest, error) {
-	id, err := pathID(r, paramID)
-	return ctx, ListCommentsRequest{ID: id}, err
+	return idRequest(ctx, r, func(id int64) ListCommentsRequest { return ListCommentsRequest{ID: id} })
 }
 
 func (ListCommentsRequest) Validate() error {

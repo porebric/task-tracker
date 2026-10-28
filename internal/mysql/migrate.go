@@ -92,43 +92,65 @@ func (d *DB) applyMigration(ctx context.Context, version string, statements []st
 }
 
 // splitStatements cuts a script into statements on semicolons outside of quoted literals,
-// dropping blank lines and lines that are only a comment.
+// honouring backslash escapes inside them and dropping "--" comments and blank lines.
 func splitStatements(script string) []string {
-	var (
-		statements []string
-		current    strings.Builder
-		quote      rune
-	)
-	flush := func() {
-		if s := strings.TrimSpace(current.String()); s != "" {
-			statements = append(statements, s)
-		}
-		current.Reset()
-	}
-
+	sc := &statementScanner{}
 	for line := range strings.SplitSeq(script, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if quote == 0 && (trimmed == "" || strings.HasPrefix(trimmed, "--")) {
-			continue
-		}
-		for _, ch := range line {
-			switch {
-			case quote != 0:
-				current.WriteRune(ch)
-				if ch == quote {
-					quote = 0
-				}
-			case ch == '\'' || ch == '"' || ch == '`':
-				quote = ch
-				current.WriteRune(ch)
-			case ch == ';':
-				flush()
-			default:
-				current.WriteRune(ch)
-			}
-		}
-		current.WriteByte('\n')
+		sc.feed(line)
 	}
-	flush()
-	return statements
+	sc.flush()
+	return sc.statements
+}
+
+type statementScanner struct {
+	statements []string
+	current    strings.Builder
+	quote      rune
+}
+
+func (sc *statementScanner) flush() {
+	if s := strings.TrimSpace(sc.current.String()); s != "" {
+		sc.statements = append(sc.statements, s)
+	}
+	sc.current.Reset()
+}
+
+func (sc *statementScanner) feed(line string) {
+	trimmed := strings.TrimSpace(line)
+	if sc.quote == 0 && (trimmed == "" || strings.HasPrefix(trimmed, "--")) {
+		return
+	}
+	runes := []rune(line)
+	for i := 0; i < len(runes); i++ {
+		ch := runes[i]
+		switch {
+		case sc.quote != 0:
+			i = sc.quoted(runes, i)
+		case ch == '-' && i+1 < len(runes) && runes[i+1] == '-':
+			i = len(runes)
+		case ch == '\'' || ch == '"' || ch == '`':
+			sc.quote = ch
+			sc.current.WriteRune(ch)
+		case ch == ';':
+			sc.flush()
+		default:
+			sc.current.WriteRune(ch)
+		}
+	}
+	sc.current.WriteByte('\n')
+}
+
+// quoted copies the rune at i inside a quoted literal and returns the index of the last rune
+// consumed: an escaped character takes two.
+func (sc *statementScanner) quoted(runes []rune, i int) int {
+	ch := runes[i]
+	sc.current.WriteRune(ch)
+	switch {
+	case ch == '\\' && i+1 < len(runes):
+		sc.current.WriteRune(runes[i+1])
+		return i + 1
+	case ch == sc.quote:
+		sc.quote = 0
+	}
+	return i
 }

@@ -12,8 +12,7 @@ type GetTaskRequest struct {
 }
 
 func NewGetTaskRequest(ctx context.Context, r *http.Request) (context.Context, GetTaskRequest, error) {
-	id, err := pathID(r, paramID)
-	return ctx, GetTaskRequest{ID: id}, err
+	return idRequest(ctx, r, func(id int64) GetTaskRequest { return GetTaskRequest{ID: id} })
 }
 
 func (GetTaskRequest) Validate() error {

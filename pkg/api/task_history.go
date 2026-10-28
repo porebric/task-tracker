@@ -12,8 +12,7 @@ type TaskHistoryRequest struct {
 }
 
 func NewTaskHistoryRequest(ctx context.Context, r *http.Request) (context.Context, TaskHistoryRequest, error) {
-	id, err := pathID(r, paramID)
-	return ctx, TaskHistoryRequest{ID: id}, err
+	return idRequest(ctx, r, func(id int64) TaskHistoryRequest { return TaskHistoryRequest{ID: id} })
 }
 
 func (TaskHistoryRequest) Validate() error {

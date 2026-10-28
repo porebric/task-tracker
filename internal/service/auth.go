@@ -44,6 +44,7 @@ func (s *Auth) Login(ctx context.Context, email, password string) (auth.Token, e
 	user, err := s.store.UserByEmail(ctx, normalizeEmail(email))
 	switch {
 	case errors.Is(err, domain.ErrUserNotFound):
+		s.hasher.Burn(password)
 		return auth.Token{}, domain.ErrInvalidCredentials
 	case err != nil:
 		return auth.Token{}, err

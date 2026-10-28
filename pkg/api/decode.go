@@ -65,3 +65,9 @@ func queryInt(r *http.Request, name string, def int) (int, error) {
 	}
 	return v, nil
 }
+
+// idRequest builds a request that carries only the {id} path parameter.
+func idRequest[T httpapi.Request](ctx context.Context, r *http.Request, build func(id int64) T) (context.Context, T, error) {
+	id, err := pathID(r, paramID)
+	return ctx, build(id), err
+}
