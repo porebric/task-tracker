@@ -1,0 +1,101 @@
+config:
+  api_port:
+    type: int
+    default: "8080"
+    source: env
+  api_read_timeout:
+    type: duration
+    default: "10s"
+    source: yaml
+  api_write_timeout:
+    type: duration
+    default: "30s"
+    source: yaml
+  api_idle_timeout:
+    type: duration
+    default: "60s"
+    source: yaml
+  api_rate_limit:
+    type: int
+    default: "120"
+    source: env
+  api_rate_window:
+    type: duration
+    default: "1m"
+    source: env
+  health_port:
+    type: int
+    default: "8081"
+    source: env
+  metrics_port:
+    type: int
+    default: "8082"
+    source: env
+  log_level:
+    type: string
+    default: "info"
+    source: env
+  log_plain:
+    type: bool
+    default: "false"
+    source: env
+  tracer_enabled:
+    type: bool
+    default: "false"
+    source: env
+  db_dsn:
+    type: string
+    default: ""
+    source: env
+  db_max_open_conns:
+    type: int
+    default: "25"
+    source: yaml
+  db_max_idle_conns:
+    type: int
+    default: "5"
+    source: yaml
+  db_conn_max_lifetime:
+    type: duration
+    default: "30m"
+    source: yaml
+  db_conn_max_idle_time:
+    type: duration
+    default: "5m"
+    source: yaml
+  db_slow_threshold:
+    type: duration
+    default: "200ms"
+    source: yaml
+  db_migrations_path:
+    type: string
+    default: "./migrations"
+    source: env
+  redis_addr:
+    type: string
+    default: "127.0.0.1:6379"
+    source: env
+  redis_password:
+    type: string
+    default: ""
+    source: env
+  redis_db:
+    type: int
+    default: "0"
+    source: env
+  cache_task_list_ttl:
+    type: duration
+    default: "5m"
+    source: yaml
+  jwt_secret:
+    type: string
+    default: ""
+    source: env
+  jwt_ttl:
+    type: duration
+    default: "24h"
+    source: yaml
+  password_cost:
+    type: int
+    default: "10"
+    source: yaml

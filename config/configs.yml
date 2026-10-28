@@ -1,0 +1,12 @@
+values:
+  api_read_timeout: "10s"
+  api_write_timeout: "30s"
+  api_idle_timeout: "60s"
+  db_max_open_conns: "25"
+  db_max_idle_conns: "5"
+  db_conn_max_lifetime: "30m"
+  db_conn_max_idle_time: "5m"
+  db_slow_threshold: "200ms"
+  cache_task_list_ttl: "5m"
+  jwt_ttl: "24h"
+  password_cost: "10"

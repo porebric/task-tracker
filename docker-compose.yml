@@ -1,0 +1,58 @@
+services:
+  mysql:
+    image: mysql:8.4
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-task_tracker}
+      MYSQL_USER: ${MYSQL_USER:-tracker}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-tracker}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build: .
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SERVICE_NAME: task-tracker
+      API_PORT: "8080"
+      HEALTH_PORT: "8081"
+      METRICS_PORT: "8082"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DB_DSN: ${MYSQL_USER:-tracker}:${MYSQL_PASSWORD:-tracker}@tcp(mysql:3306)/${MYSQL_DATABASE:-task_tracker}
+      DB_MIGRATIONS_PATH: /app/migrations
+      REDIS_ADDR: redis:6379
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+    ports:
+      - "${API_PORT:-8080}:8080"
+      - "${HEALTH_PORT:-8081}:8081"
+      - "${METRICS_PORT:-8082}:8082"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mysql-data:
